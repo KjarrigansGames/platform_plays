@@ -198,14 +198,11 @@ class PlatformPlays
           msg = resp.message
           next if msg.nil?
 
-          puts "Callback Incoming...#{resp}"
           match = @matches[msg.message_id]
           next if match.nil?
 
-          p match
           case match.state
           when State::WaitForPlayers
-            p "Assign Player: #{resp.data}"
             if match.player_1.nil?
               match.player_1 = resp.data
             elsif match.player_2.nil? && resp.data != match.player_1
@@ -235,7 +232,6 @@ class PlatformPlays
               @matches.delete(msg.message_id)
             end
           end
-          p @matches
         end
       end
     end
