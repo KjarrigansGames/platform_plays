@@ -226,7 +226,8 @@ class PlatformPlays
           when State::WaitForApprove
             if resp.data == "Yes"
               send_message("Got it!")
-              match.state == State::WaitForPublish
+              match.state = State::WaitForPublish
+              @matches[msg.message_id] = match
             else
               send_message("Please start a new /ur session to correct your input!")
               @matches.delete(msg.message_id)
