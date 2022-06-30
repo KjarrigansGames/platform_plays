@@ -1,0 +1,15 @@
+---
+id: ur
+name: the Royal Game of Ur
+players:
+- Holger
+- Markus
+- Raphael
+scores:
+- "5-4"
+- "5-3"
+- "5-2"
+- "5-1"
+- "5-0"
+repo: ManUrEl
+branch: master

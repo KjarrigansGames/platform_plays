@@ -1,8 +1,11 @@
 require "http/client"
 require "json"
+require "yaml"
 
+require "./platform_plays/config"
 require "./platform_plays/match"
 require "./platform_plays/telegram"
+
 class PlatformPlays
   class Error < Exception; end
 
@@ -10,15 +13,26 @@ class PlatformPlays
 
   property channel : Int32|String
   property next_update_id : Int32 = 0
+  property config : Array(GameConfig)
 
   def initialize(@channel, token : String, url = "https://api.telegram.org/bot")
     @url = url + token
     @matches = Hash(Int32, Match).new
+    @config = Config.load
   end
 
   # There seems to be no actively maintained libgit2 binding yet, so using ShellExec for now
-  def commit_ur(matches)
-    Dir.cd("ManUrEl") do
+  def commit(game_id, matches)
+    game = @config.find do |cfg| cfg.id == game_id end
+    return if game.nil?
+
+    repo = game.repo
+    if repo.nil?
+      send_message "No target repo configured for #{game.id}. Abort"
+      return
+    end
+
+    Dir.cd(repo) do
       `git checkout -f master && git pull`
       File.open("match.log", "a+") do |log|
         matches.each do |match|
@@ -26,7 +40,7 @@ class PlatformPlays
         end
       end
       `git commit -am "Update match.log"`
-      # `git push origin master`
+      `git push origin #{game.branch}` if ENV["PP_PUSH"]?
     end
   end
 
@@ -38,42 +52,40 @@ class PlatformPlays
           next if msg.nil?
 
           case msg.text
-          when "/ur"
-            msg = send_poll("Who played the Royal game of Ur (Click 2 times, Winner first)?", ["Holger", "Raphael", "Markus"])
-            @matches[msg.message_id] = Match.new(game: "Ur", state: State::WaitForPlayers)
           when "/cache"
-            report = { "Ur" => Array(String).new }
-            @matches.each do |_id, match|
-              next unless match.state == State::WaitForPublish
-
-              report[match.game] << match.to_s
-            end
-
-            send_message("No games ready for commit!") if report.values.all? do |list| list.empty? end
-
-            report.each do |game_name, list|
-              next if list.empty?
-
-              send_message("Uncommited #{game_name} matches:\n" + list.join("\n"))
-            end
-          when "/commit"
             list = @matches.values.select do |match|
               match.state == State::WaitForPublish
-            end.group_by do |match| match.game end
+            end
 
             if list.empty?
               send_message "Nothing to commit"
               next
             end
 
-            list.each do |game, matches|
-              case game
-              when "Ur"
-                commit_ur matches
-              else
-                send_message "Unknown game: #{game}"
-              end
+            list.group_by do |match| match.game end.each do |game_id, matches|
+              next if matches.empty?
+
+              send_message("Uncommited #{game_id} matches:\n" + matches.map do |match| match.to_s end.join("\n"))
             end
+          when "/commit"
+            list = @matches.values.select do |match|
+              match.state == State::WaitForPublish
+            end
+
+            if list.empty?
+              send_message "Nothing to commit"
+              next
+            end
+
+            list.group_by do |match| match.game end.each do |game, matches|
+              commit game, matches
+            end
+          when /\/(\w+)/
+            game = @config.find do |cfg| cfg.id == $1 end
+            next if game.nil?
+
+            msg = send_poll("Who played #{game.name} (Click 2 times, Winner first)?", game.players)
+            @matches[msg.message_id] = Match.new(game: game.id, state: State::WaitForPlayers)
           end
         elsif update.callback_query
           resp = update.callback_query
@@ -82,7 +94,7 @@ class PlatformPlays
           msg = resp.message
           next if msg.nil?
 
-          match = @matches[msg.message_id]
+          match = @matches[msg.message_id]?
           next if match.nil?
 
           case match.state
@@ -98,7 +110,11 @@ class PlatformPlays
             if match.player_1 && match.player_2
               match.state = State::WaitForScore
               @matches.delete(msg.message_id)
-              msg = send_poll("%s vs %s - How did it end?" % [match.player_1, match.player_2], ["5-4", "5-3", "5-2", "5-1", "5-0"])
+
+              game = @config.find do |cfg| cfg.id == match.game end
+              next if game.nil?
+
+              msg = send_poll("%s vs %s - How did it end?" % [match.player_1, match.player_2], game.scores)
             end
             @matches[msg.message_id] = match
           when State::WaitForScore
@@ -113,7 +129,7 @@ class PlatformPlays
               match.state = State::WaitForPublish
               @matches[msg.message_id] = match
             else
-              send_message("Please start a new /ur session to correct your input!")
+              send_message("Match aborted")
               @matches.delete(msg.message_id)
             end
           end
@@ -123,5 +139,5 @@ class PlatformPlays
   end
 end
 
-pp = PlatformPlays.new(channel: "CHANNEL_ID", token: "SECRET")
+pp = PlatformPlays.new(channel: ENV["PP_CHANNEL"], token: ENV["PP_TOKEN"])
 pp.run
