@@ -1,0 +1,13 @@
+name: platform_plays
+version: 0.1.0
+
+authors:
+  - Holger Arndt <holger.arndt@hetzner.com>
+
+targets:
+  platform_plays:
+    main: src/platform_plays.cr
+
+crystal: 1.4.1
+
+license: MIT
