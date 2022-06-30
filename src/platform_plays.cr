@@ -124,20 +124,72 @@ class PlatformPlays
     property state : State
     def initialize(@game, @state)
     end
+
+    def to_s
+      "| %10s | %-8s | %-8s | %3s |" % [Time.local.to_s("%d.%m.%Y"), player_1, player_2, score]
+    end
+  end
+
+  # There seems to be no actively maintained libgit2 binding yet, so using ShellExec for now
+  def commit_ur(matches)
+    Dir.cd("ManUrEl") do
+      `git checkout -f master && git pull`
+      File.open("match.log", "a+") do |log|
+        matches.each do |match|
+          log.puts match.to_s
+        end
+      end
+      `git commit -am "Update match.log"`
+      `git push origin main`
+    end
   end
 
   def run
     loop do
       get_updates(timeout: 600).each do |update|
-        puts "Update incoming: #{update.inspect}"
         if update.message
           msg = update.message
           next if msg.nil?
 
-          if msg.text == "/ur"
-            puts "New Game of Ur triggered"
+          case msg.text
+          when "/ur"
             msg = send_poll("Who played the Royal game of Ur (Click 2 times, Winner first)?", ["Holger", "Raphael", "Markus"])
             @matches[msg.message_id] = Match.new(game: "Ur", state: State::WaitForPlayers)
+          when "/cache"
+            report = { "Ur" => Array(String).new }
+            @matches.each do |_id, match|
+              next unless match.state == State::WaitForPublish
+
+              report[match.game] << match.to_s
+            end
+
+            p @matches
+
+            send_message("No games ready for commit!") if report.values.all? do |list| list.empty? end
+
+            report.each do |game_name, list|
+              next if list.empty?
+
+              send_message("Uncommited #{game_name} matches:\n" + list.join("\n"))
+            end
+          when "/commit"
+            list = @matches.values.select do |match|
+              match.state == State::WaitForPublish
+            end.group_by do |match| match.game end
+
+            if list.empty?
+              send_message "Nothing to commit"
+              next
+            end
+
+            list.each do |game, matches|
+              case game
+              when "Ur"
+                commit_ur matches
+              else
+                send_message "Unknown game: #{game}"
+              end
+            end
           end
         elsif update.callback_query
           resp = update.callback_query
