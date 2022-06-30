@@ -1,60 +1,12 @@
 require "http/client"
 require "json"
 
+require "./platform_plays/match"
+require "./platform_plays/telegram"
 class PlatformPlays
   class Error < Exception; end
 
   VERSION = "0.1.0"
-
-  struct User
-    include JSON::Serializable
-
-    property id : Int32
-    property is_bot : Bool
-    property first_name : String?
-    property last_name : String?
-    property username : String?
-  end
-
-  struct Message
-    include JSON::Serializable
-
-    property message_id : Int32
-    property from : User
-    property date : Int32
-    property text : String?
-  end
-
-  struct CallbackQuery
-    include JSON::Serializable
-
-    property id : String
-    property from : User
-    property message : Message
-    property data : String
-  end
-
-  struct Update
-    include JSON::Serializable
-
-    property update_id : Int32
-    property message : Message?
-    property callback_query : CallbackQuery?
-  end
-
-  class Result
-    include JSON::Serializable
-
-    property ok : Bool
-  end
-
-  class MessageResult < Result
-    property result : Message
-  end
-
-  class UpdateResult < Result
-    property result : Array(Update)
-  end
 
   property channel : Int32|String
   property next_update_id : Int32 = 0
@@ -62,72 +14,6 @@ class PlatformPlays
   def initialize(@channel, token : String, url = "https://api.telegram.org/bot")
     @url = url + token
     @matches = Hash(Int32, Match).new
-  end
-
-  def get_updates(timeout = 0)
-    params = { allowed_updates: ["message", "callback_query"], offset: @next_update_id, timeout: timeout}
-    updates = UpdateResult.from_json(request("/getUpdates", body: params.to_json)).result
-
-    unless updates.empty?
-      @next_update_id = updates.map { |upd| upd.update_id }.max + 1
-    end
-    updates
-  end
-
-  def send_poll(question : String, options : Array(String))
-    params = {
-      chat_id: channel,
-      text: question,
-      disable_notification: true,
-      protect_content: true,
-      reply_markup: {
-        inline_keyboard: options.map { |opt| [{ text: opt, callback_data: opt }] }
-      }
-    }
-    json = request("/sendMessage", body: params.to_json)
-    MessageResult.from_json(json).result
-  rescue err : JSON::SerializableError
-    puts json
-    raise err
-  end
-
-  def send_message(message : String)
-    params = {
-      chat_id: channel,
-      text: message,
-      disable_notification: true,
-      protect_content: true
-    }
-    json = request("/sendMessage", body: params.to_json)
-    MessageResult.from_json(json).result
-  rescue err : JSON::SerializableError
-    puts json
-    raise err
-  end
-
-  enum State
-    WaitForPlayers
-    WaitForScore
-    WaitForApprove
-    WaitForPublish
-    Publishing
-    Done
-  end
-
-  struct Match
-    include JSON::Serializable
-
-    property game : String
-    property player_1 : String|Nil
-    property player_2 : String|Nil
-    property score : String|Nil
-    property state : State
-    def initialize(@game, @state)
-    end
-
-    def to_s
-      "| %10s | %-8s | %-8s | %3s |" % [Time.local.to_s("%d.%m.%Y"), player_1, player_2, score]
-    end
   end
 
   # There seems to be no actively maintained libgit2 binding yet, so using ShellExec for now
@@ -140,7 +26,7 @@ class PlatformPlays
         end
       end
       `git commit -am "Update match.log"`
-      `git push origin main`
+      # `git push origin master`
     end
   end
 
@@ -162,8 +48,6 @@ class PlatformPlays
 
               report[match.game] << match.to_s
             end
-
-            p @matches
 
             send_message("No games ready for commit!") if report.values.all? do |list| list.empty? end
 
@@ -236,14 +120,6 @@ class PlatformPlays
         end
       end
     end
-  end
-
-  private def request(path : String, body : String = "")
-    resp = HTTP::Client.get(@url + path, body: body, headers: HTTP::Headers{"Content-Type" => "application/json" })
-    raise Error.new("GET #{path} failed with #{resp.status_code}") unless resp.success?
-    raise Error.new("GET #{path} failed: #{resp.body}") unless Result.from_json(resp.body).ok
-
-    resp.body
   end
 end
 
