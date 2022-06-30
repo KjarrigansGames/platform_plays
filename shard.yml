@@ -2,7 +2,7 @@ name: platform_plays
 version: 0.1.0
 
 authors:
-  - Holger Arndt <holger.arndt@hetzner.com>
+  - Holger Arndt <games@kjarrigan.de>
 
 targets:
   platform_plays:

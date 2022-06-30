@@ -1,27 +1,16 @@
 # platform_plays
 
-TODO: Write a description here
+A telegram bot to make it easier to track our games of https://github.com/KjarrigansGames/ManUrEl
 
 ## Installation
 
-TODO: Write installation instructions here
+1. Clone this repo
+2. `Run shards build`
 
 ## Usage
 
-TODO: Write usage instructions here
-
-## Development
-
-TODO: Write development instructions here
-
-## Contributing
-
-1. Fork it (<https://github.com/your-github-user/platform_plays/fork>)
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create a new Pull Request
+`TOKEN=SECRET ./platform_plays`
 
 ## Contributors
 
-- [Holger Arndt](https://github.com/your-github-user) - creator and maintainer
+- [Holger Arndt](https://github.com/Kjarrigan) - creator and maintainer
