@@ -1,0 +1,3 @@
+[submodule "ManUrEl"]
+	path = ManUrEl
+	url = git@github.com:KjarrigansGames/ManUrEl.git
